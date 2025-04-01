@@ -300,7 +300,12 @@ def phitheta_resonance(ratio, a, e, x):
     """
     
     a, x = _standardize_params(a, x)
-    
+    if ratio <= 0:
+        raise ValueError("The ratio must be positive")
+    if (ratio > 1) & (x < 0):
+        raise ValueError("The ratio must be larger than 1 if the orbit is prograde")
+    if (ratio < 1) & (x > 0):
+        raise ValueError("The ratio must be lesser than 1 if the orbit is retrograde")
     if a == 1:
         raise ValueError("Extreme Kerr not supported")
     if x == 0:
@@ -386,16 +391,16 @@ def rphi_resonance_weakFieldLimit(ratio, a, p, e, is_prograde=True):
     if not valid_params(a, e, 0.5):
         raise ValueError("a^2, e and x^2 must be between 0 and 1")
     
-    p0 = 6/(1-ratio**2)
     k_rtheta = lambda x: (2*(-6+p)*p+24*a*sqrt(p)*x
                           +3*a**2*(1-5*x**2+e**2*(-1+x**2))
                           )/(
                               2*p**2+3*e**2*(1+a**2*(-1+x**2)))
-    Lz_sign = (int(is_prograde)+1)/2
-    equation = lambda x: 1/abs(Lz_sign/sqrt(k_rtheta(x))+2*a/p**(3/2)+(-a**2*x-5*e**2*a**2*x/4)/p**2)-ratio
+    Lz_sign = 2*int(is_prograde)-1
+    equation = lambda x: abs(Lz_sign/sqrt(k_rtheta(x))*(1+a**2*(1-e**2)*(1-abs(x))/2/p**2)
+                             +2*a/p**(3/2)+(-a**2*x-5*e**2*a**2*x/4)/p**2)-1/ratio
     x_sol = newton(equation, x0=0.5*Lz_sign)
     return 1-x_sol**2
-    
+
 # Frequency ratio of r-theta and r-phi in special limits (support finding triple resonance)
 ## In the polar limit
 def rtheta_frequencyRatio_polarLimit(a, p, e, is_prograde=True):
