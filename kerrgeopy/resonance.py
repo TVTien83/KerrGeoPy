@@ -585,7 +585,7 @@ def rphi_frequencyRatio_equatorialLimit(a, p, e, is_prograde=True):
 
 # Finding triple resonance
 def tripleResonance_phiMode(rMode, thetaMode, a, e, is_prograde=True):
-    """Find possible phi resonant modes from r-mode and theta-mode.
+    """Find possible phi-modes sastify rMode*omega_r=thetaMode*omega_theta=phiMode*omega_phi.
 
     Parameters
     ----------
@@ -631,7 +631,7 @@ def tripleResonance_phiMode(rMode, thetaMode, a, e, is_prograde=True):
     return sorted([k1*rMode, k2*rMode])
 
 def tripleResonance_thetaMode(rMode, phiMode, a, e, is_prograde=True):
-    """Find possible theta resonant modes from r-mode and phi-mode.
+    """Find possible theta-modes sastify rMode*omega_r=thetaMode*omega_theta=phiMode*omega_phi.
 
     Parameters
     ----------
@@ -675,7 +675,7 @@ def tripleResonance_thetaMode(rMode, phiMode, a, e, is_prograde=True):
                 rphi_ratio)
     
     return sorted([k1*rMode, k2*rMode])
-    
+
 def tripleResonance(rMode, thetaMode, phiMode, a, e, is_prograde=True):
     """Find (p, x) from resonant modes
 
