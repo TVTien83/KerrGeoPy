@@ -310,7 +310,6 @@ def phitheta_resonance(ratio, a, e, x):
     if not valid_params(a, e, x):
         raise ValueError("a^2, e and x^2 must be between 0 and 1")
 
-    k = ratio**2
     p0 = separatrix(a, e, x)+1e-10
     p_sol = newton(lambda p: abs(_phitheta_frequencyRatio(a, p, e, x))-ratio, x0=p0)
     return p_sol
