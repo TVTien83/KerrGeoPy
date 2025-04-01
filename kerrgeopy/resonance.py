@@ -331,8 +331,8 @@ def rtheta_resonance_weakFieldLimit(ratio, a, p, e):
 
     Returns
     -------
-    p : double
-        orbital semi-latus rectum
+    z_minus : double
+        squared cosine of the polar angle
     """
     a = abs(a)
     
@@ -354,7 +354,7 @@ def rtheta_resonance_weakFieldLimit(ratio, a, p, e):
             - (4 * p**2 * (1 - 6 * e**2 / p0)) / (5 - 6 * e**2 / p0)**4
         ))
 
-def rphi_resonance_weakFieldLimit(ratio, a, p, e):
+def rphi_resonance_weakFieldLimit(ratio, a, p, e, is_prograde=True):
     """Return approximated p of r-phi resonant orbit in the weak-field limit
 
     Parameters
@@ -365,36 +365,36 @@ def rphi_resonance_weakFieldLimit(ratio, a, p, e):
         dimensionless spin of the black hole
     e : double
         orbital eccentricity
-    x : double
-        cosine of the orbital inclination
+    p : double
+        orbital semi-latus rectum
 
     Returns
     -------
-    p : double
-        orbital semi-latus rectum
+    
+    z_minus : double
+        squared cosine of the polar angle
     """
     
-    a, x = _standardize_params(a, x)
+    a = abs(a)
     
     if not valid_frequencyRatio(ratio):
         raise ValueError("The ratio must be between 0 and 1")
     if a == 1:
         raise ValueError("Extreme Kerr not supported")
-    if x == 0:
-        raise ValueError("Polar orbits not supported")
     if e == 1:
         raise ValueError("Marginally bound orbits not supported")
-    if not valid_params(a, e, x):
+    if not valid_params(a, e, 0.5):
         raise ValueError("a^2, e and x^2 must be between 0 and 1")
     
     p0 = 6/(1-ratio**2)
-    k_rtheta = lambda p: abs((2*(-6+p)*p+24*a*sqrt(p)*x
+    k_rtheta = lambda x: (2*(-6+p)*p+24*a*sqrt(p)*x
                           +3*a**2*(1-5*x**2+e**2*(-1+x**2))
                           )/(
-                              2*p**2+3*e**2*(1+a**2*(-1+x**2))))
-    equation = lambda p: 1/abs(sign(x)/sqrt(k_rtheta(p))+2*a/p**(3/2)+(-a**2*x-5*e**2*a**2*x/4)/p**2)-ratio
-    p_sol = newton(equation, x0=p0)
-    return p_sol
+                              2*p**2+3*e**2*(1+a**2*(-1+x**2)))
+    Lz_sign = (int(is_prograde)+1)/2
+    equation = lambda x: 1/abs(Lz_sign/sqrt(k_rtheta(x))+2*a/p**(3/2)+(-a**2*x-5*e**2*a**2*x/4)/p**2)-ratio
+    x_sol = newton(equation, x0=0.5*Lz_sign)
+    return 1-x_sol**2
     
 # Frequency ratio of r-theta and r-phi in special limits (support finding triple resonance)
 ## In the polar limit
