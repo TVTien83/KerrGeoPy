@@ -224,16 +224,23 @@ def rtheta_resonance(ratio, a, e, x):
     if not valid_params(a, e, x):
         raise ValueError("a^2, e and x^2 must be between 0 and 1")
     
+    p_sol = None
     try:
         p0 = 6/(1-ratio**2)
         p1 = separatrix(a, e, x)+1e-10
         p_sol = newton(lambda p: abs(_rtheta_frequencyRatio(a, p, e, x))-ratio, x0=p0, x1=p1)
     except ValueError:
-        p0 = separatrix(a, e, x)+1e-10
-        p_sol = newton(lambda p: abs(_rtheta_frequencyRatio(a, p, e, x))-ratio, x0=p0)
-        return p_sol    
+        try:
+            p0 = separatrix(a, e, x)+1e-10
+            p_sol = newton(lambda p: abs(_rtheta_frequencyRatio(a, p, e, x))-ratio, x0=p0)
+        except ValueError:
+            pass
+        else:
+            return p_sol    
     else:
         return p_sol
+    if not p_sol:
+        raise ValueError("p is too close to that of the separatrix.")
 
 def rphi_resonance(ratio, a, e, x):
     """Return p of r-phi resonant orbit
@@ -268,16 +275,23 @@ def rphi_resonance(ratio, a, e, x):
     if not valid_params(a, e, x):
         raise ValueError("a^2, e and x^2 must be between 0 and 1")
 
+    p_sol = None
     try:
         p0 = 6/(1-ratio**2)
         p1 = separatrix(a, e, x)+1e-10
         p_sol = newton(lambda p: abs(_rphi_frequencyRatio(a, p, e, x))-ratio, x0=p0, x1=p1)
     except ValueError:
-        p0 = separatrix(a, e, x)+1e-10
-        p_sol = newton(lambda p: abs(_rphi_frequencyRatio(a, p, e, x))-ratio, x0=p0)
-        return p_sol    
+        try:
+            p0 = separatrix(a, e, x)+1e-10
+            p_sol = newton(lambda p: abs(_rphi_frequencyRatio(a, p, e, x))-ratio, x0=p0)
+        except ValueError:
+            pass
+        else:
+            return p_sol    
     else:
         return p_sol
+    if not p_sol:
+        raise ValueError("p is too close to that of the separatrix.")
 
 def phitheta_resonance(ratio, a, e, x):
     """Return p of phi-theta resonant orbit
@@ -300,8 +314,8 @@ def phitheta_resonance(ratio, a, e, x):
     """
     
     a, x = _standardize_params(a, x)
-    if ratio <= 0:
-        raise ValueError("The ratio must be positive")
+    if (ratio <= 0) | (ratio == 1):
+        raise ValueError("The ratio must be positive and not equal to 1")
     if (ratio > 1) & (x < 0):
         raise ValueError("The ratio must be larger than 1 if the orbit is prograde")
     if (ratio < 1) & (x > 0):
@@ -315,91 +329,23 @@ def phitheta_resonance(ratio, a, e, x):
     if not valid_params(a, e, x):
         raise ValueError("a^2, e and x^2 must be between 0 and 1")
 
-    p0 = separatrix(a, e, x)+1e-10
-    p_sol = newton(lambda p: abs(_phitheta_frequencyRatio(a, p, e, x))-ratio, x0=p0)
-    return p_sol
-
-## In the weak-field limit (only r-theta and r-phi)
-def rtheta_resonance_weakFieldLimit(ratio, a, p, e):
-    """Return approximated cos^2(theta) of r-theta resonant orbit in the weak-field limit
-
-    Parameters
-    ----------
-    ratio: double
-        r-phi frequency ratio
-    a : double
-        dimensionless spin of the black hole
-    p : double
-        orbital semi-latus rectum
-    e : double
-        orbital eccentricity
-
-    Returns
-    -------
-    z_minus : double
-        squared cosine of the polar angle
-    """
-    a = abs(a)
-    
-    if not valid_frequencyRatio(ratio):
-        raise ValueError("The ratio must be between 0 and 1")
-    if a == 1:
-        raise ValueError("Extreme Kerr not supported")
-    if e == 1:
-        raise ValueError("Marginally bound orbits not supported")
-    if not valid_params(a, e, .5):
-        raise ValueError("a^2, e and x^2 must be between 0 and 1")
-    
-    p0 = 6/(1-ratio**2)
-    return (
-        (4 * a**2 + e**2 - (6 * e**2 + 4 * p**2) / p0) / (a**2 * (5 - 6 * e**2 / p0)) 
-        - (12 * p * (2 * e**2 / p0 + 1)) / (a**2 * (5 - 6 * e**2 / p0)**2)
-        + (8 / a**2) * np.sqrt(
-            (p * (a**2 - e**2 + (6 * e**2 * (1 - a**2) + 4 * p**2) / p0)) / (5 - 6 * e**2 / p0)**3 
-            - (4 * p**2 * (1 - 6 * e**2 / p0)) / (5 - 6 * e**2 / p0)**4
-        ))
-
-def rphi_resonance_weakFieldLimit(ratio, a, p, e, is_prograde=True):
-    """Return approximated p of r-phi resonant orbit in the weak-field limit
-
-    Parameters
-    ----------
-    ratio: double
-        r-phi frequency ratio
-    a : double
-        dimensionless spin of the black hole
-    e : double
-        orbital eccentricity
-    p : double
-        orbital semi-latus rectum
-
-    Returns
-    -------
-    
-    z_minus : double
-        squared cosine of the polar angle
-    """
-    
-    a = abs(a)
-    
-    if not valid_frequencyRatio(ratio):
-        raise ValueError("The ratio must be between 0 and 1")
-    if a == 1:
-        raise ValueError("Extreme Kerr not supported")
-    if e == 1:
-        raise ValueError("Marginally bound orbits not supported")
-    if not valid_params(a, e, 0.5):
-        raise ValueError("a^2, e and x^2 must be between 0 and 1")
-    
-    k_rtheta = lambda x: (2*(-6+p)*p+24*a*sqrt(p)*x
-                          +3*a**2*(1-5*x**2+e**2*(-1+x**2))
-                          )/(
-                              2*p**2+3*e**2*(1+a**2*(-1+x**2)))
-    Lz_sign = 2*int(is_prograde)-1
-    equation = lambda x: abs(Lz_sign/sqrt(k_rtheta(x))*(1+a**2*(1-e**2)*(1-abs(x))/2/p**2)
-                             +2*a/p**(3/2)+(-a**2*x-5*e**2*a**2*x/4)/p**2)-1/ratio
-    x_sol = newton(equation, x0=0.5*Lz_sign)
-    return 1-x_sol**2
+    p_sol = None
+    try:
+        p0 = (2*a/abs(ratio**2-1))**(2/3)
+        p1 = separatrix(a, e, x)+1e-10
+        p_sol = newton(lambda p: abs(_phitheta_frequencyRatio(a, p, e, x))-ratio, x0=p0, x1=p1)
+    except ValueError: 
+        try:
+            p0 = separatrix(a, e, x)+1e-10
+            p_sol = newton(lambda p: abs(_phitheta_frequencyRatio(a, p, e, x))-ratio, x0=p0)
+        except ValueError:
+            pass
+        else:
+            return p_sol
+    else:
+        return p_sol
+    if not p_sol:
+        raise ValueError("p is too close to that of the separatrix.")
 
 # Frequency ratio of r-theta and r-phi in special limits (support finding triple resonance)
 ## In the polar limit
