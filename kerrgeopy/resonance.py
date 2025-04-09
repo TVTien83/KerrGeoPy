@@ -193,7 +193,7 @@ def _phitheta_frequencyRatio(a, p, e, x):
 ## In general 
 
 def _doubleResonance_solver(equation, p0, sep):
-    '''Try `scipy.newton` twive with different initial guess, one of them is very near the separatrix
+    '''Try `scipy.newton` with two different initial guess, one of them is very near the separatrix. Also try solving by using `scipy.root_scalar(method="brentq")`
     
     Parameters
     ----------
@@ -361,6 +361,15 @@ def rtheta_frequencyRatio_polarLimit(a, p, e, is_prograde=True):
     -------
     double
     """
+    
+    a = abs(a)
+    if a == 1:
+        raise ValueError("Extreme Kerr not supported")
+    if e == 1:
+        raise ValueError("Marginally bound orbits not supported")
+    if not valid_params(a, e, 0.5):
+        raise ValueError("a^2, e and x^2 must be between 0 and 1")
+    
     Lz_sign = -1+2*int(is_prograde)
     P = (a**2*(a**4*(-1+e**2)*2+p**4+2*a**2*p*(-2+p+e**2*(2+p)))
          )/(
@@ -452,6 +461,14 @@ def phitheta_frequencyRatio_polarLimit(a, p, e, is_prograde=True):
     -------
     double
     """
+    a = abs(a)
+    if a == 1:
+        raise ValueError("Extreme Kerr not supported")
+    if e == 1:
+        raise ValueError("Marginally bound orbits not supported")
+    if not valid_params(a, e, 0.5):
+        raise ValueError("a^2, e and x^2 must be between 0 and 1")
+    
     Lz_sign = -1+2*int(is_prograde)
     P = (a**2*(a**4*(-1+e**2)*2+p**4+2*a**2*p*(-2+p+e**2*(2+p)))
          )/(
@@ -506,6 +523,13 @@ def rtheta_frequencyRatio_equatorialLimit(a, p, e, is_prograde=True):
     -------
     double
     """
+    a = abs(a)
+    if a == 1:
+        raise ValueError("Extreme Kerr not supported")
+    if e == 1:
+        raise ValueError("Marginally bound orbits not supported")
+    if not valid_params(a, e, 0.5):
+        raise ValueError("a^2, e and x^2 must be between 0 and 1")
     
     Lz_sign = -1+2*int(is_prograde)
     P = 0
@@ -547,6 +571,14 @@ def rphi_frequencyRatio_equatorialLimit(a, p, e, is_prograde=True):
     -------
     double
     """
+    a = abs(a)
+    if a == 1:
+        raise ValueError("Extreme Kerr not supported")
+    if e == 1:
+        raise ValueError("Marginally bound orbits not supported")
+    if not valid_params(a, e, 0.5):
+        raise ValueError("a^2, e and x^2 must be between 0 and 1")
+    
     Lz_sign = -1+2*int(is_prograde)
     P = 0
     S = 2*(a**4*(-1+e**2)*p+(-4+p)*p**3+a**2*p**2*(3+e**2+p)
@@ -599,6 +631,14 @@ def phitheta_frequencyRatio_equatorialLimit(a, p, e, is_prograde=True):
     -------
     double
     """
+    a = abs(a)
+    if a == 1:
+        raise ValueError("Extreme Kerr not supported")
+    if e == 1:
+        raise ValueError("Marginally bound orbits not supported")
+    if not valid_params(a, e, 0.5):
+        raise ValueError("a^2, e and x^2 must be between 0 and 1")
+    
     Lz_sign = -1+2*int(is_prograde)
     P = 0
     S = 2*(a**4*(-1+e**2)*p+(-4+p)*p**3+a**2*p**2*(3+e**2+p)
