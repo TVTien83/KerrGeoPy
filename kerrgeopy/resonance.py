@@ -208,16 +208,16 @@ def _doubleResonance_solver(equation, p0, sep):
     -------
     p : double
         orbital semi-latus rectum
-    '''
+    '''    
     try:
         p_sol = newton(equation, p0)
-    except RuntimeError:
+    except (RuntimeError, ValueError, RuntimeWarning):
         try:
             p_sol = root_scalar(equation, method="brentq", bracket=(sep+1e-5, p0)).root
         except:
             try:
                 p_sol = newton(equation, sep+1e-5)
-            except RuntimeError:
+            except (RuntimeError, ValueError, RuntimeWarning):
                 pass
             else:
                 return p_sol
