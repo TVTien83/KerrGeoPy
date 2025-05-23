@@ -8,12 +8,6 @@ from scipy.optimize import fsolve, newton, root_scalar
 from scipy.special import elliprf, ellipk
 from numpy import sqrt, pi, sign
 
-def valid_frequencyRatio(ratio):
-    if (0 < abs(ratio)) & (abs(ratio) < 1):
-        return True
-    else:
-        return False
-
 def valid_integers(r, phi, theta):
     if r < 0:
         return False
