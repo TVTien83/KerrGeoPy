@@ -5,15 +5,185 @@ from .frequencies import _ellippi
 from .constants import *
 from .constants import _standardize_params
 from scipy.optimize import fsolve, newton, root_scalar
-from scipy.special import elliprf
+from scipy.special import elliprf, ellipk
 from numpy import sqrt, pi, sign
 
 def valid_frequencyRatio(ratio):
-    if (0 < ratio) & (ratio < 1):
+    if (0 < abs(ratio)) & (abs(ratio) < 1):
         return True
     else:
         return False
 
+def valid_integers(r, phi, theta):
+    if r < 0:
+        return False
+    if (r!=0) & (phi!=0) & (theta!=0):
+        if (r<abs(phi)) & (r<abs(theta)):
+            return True
+    elif (r==0) & (phi!=0) & (theta!=0):
+        if phi*theta>0:
+            return True
+    elif (r!=0) & (phi==0) & (theta!=0):
+        if r<abs(theta):
+            return True
+    elif (r!=0) & (phi!=0) & (theta==0):
+        if r<abs(phi):
+            return True
+    else:
+        return False
+
+# Frequency ratio functions
+## Needed functions
+def _r3r4_prod(a, p, e, x):
+    """
+    r3*r4
+    """
+    numerator_term1 = ((-4 + p) * p**7 + a**8 * (-1 + e**2)**4 * (-1 + x**2)**2 + 
+         2 * a**6 * (-1 + e**2)**2 * p * (1 - x**2) * ((1 + e**2) * p + (-2 + p + e**2 * (2 + p)) * (1 - x**2)) + 
+         a**4 * p**3 * ((-3 + 2 * e**2 + e**4) * p + 4 * (-4 + 3 * p + e**4 * (4 + p)) * (1 - x**2) + 
+         (-1 + e**2) * (-4 + e**2 * (-12 + p) + 3 * p) * (-1 + x**2)**2))
+    numerator_term2 =  ((-1 - e**2) * p**4 * (-2 + x**2) + 
+          8 * (-1 + e**2) * p**2 * (-1 + x**2) + 
+          2 * p**3 * (-3 - e**2 + 4 * (1 + e**2) * x**2))
+    numerator_term3 = (-1/(a**2*p))*(
+        (a**4*(-1 + e**2)**2 + 
+        (-4*e**2 + (-2 + p)**2)*p**2 + 
+        2*a**2*p*(-2 + p + e**2*(2 + p)))*x**2*(-p**2 + a**2*(-1 + e)**2*(-1 + x**2))*
+        (-p**2 + a**2*(1 + e)**2*(-1 + x**2))*(-p**2 + a**2*(-1 + e**2)*(-1 + x**2)))
+    if x>=0:
+        numerator = a**2*(1-x**2)*(numerator_term1+2*a**2*p**2*(numerator_term2-4*sqrt(numerator_term3)))
+    else:
+        numerator = a**2*(1-x**2)*(numerator_term1+2*a**2*p**2*(numerator_term2+4*sqrt(numerator_term3)))
+    denominator = ((-4 + p)**2 * p**6 + a**8 * (-1 + e**2)**4 * (-1 + x**2)**2 + 
+         2 * a**2 * p**5 * ((-1 + e**2) * (4 + p) + (-4 + e**2 * (-12 + p) + 3 * p) * (1 - x**2)) + 
+         2 * a**6 * (-1 + e**2)**2 * p**2 * (-1 + x**2) * (-2 + 3 * x**2 + e**2 * (-2 + x**2)) + 
+         a**4 * p**3 * (-8 * (-1 + e**2)**2 * (1 - 3 * x**2 + 2 * x**4) + 
+         p * ((-1 + e**2)**2 - 4 * (-1 + e**4) * (-1 + x**2) + (3 + e**2)**2 * (-1 + x**2)**2)))
+
+    return numerator/denominator
+
+def _r3r4_prod_reduced(a, p, e, x):
+    """
+    r3*r4/(1-x^2)
+    """
+    numerator_term1 = ((-4 + p) * p**7 + a**8 * (-1 + e**2)**4 * (-1 + x**2)**2 + 
+         2 * a**6 * (-1 + e**2)**2 * p * (1 - x**2) * ((1 + e**2) * p + (-2 + p + e**2 * (2 + p)) * (1 - x**2)) + 
+         a**4 * p**3 * ((-3 + 2 * e**2 + e**4) * p + 4 * (-4 + 3 * p + e**4 * (4 + p)) * (1 - x**2) + 
+         (-1 + e**2) * (-4 + e**2 * (-12 + p) + 3 * p) * (-1 + x**2)**2))
+    numerator_term2 =  ((-1 - e**2) * p**4 * (-2 + x**2) + 
+          8 * (-1 + e**2) * p**2 * (-1 + x**2) + 
+          2 * p**3 * (-3 - e**2 + 4 * (1 + e**2) * x**2))
+    numerator_term3 = (-1/(a**2*p))*(
+        (a**4*(-1 + e**2)**2 + 
+        (-4*e**2 + (-2 + p)**2)*p**2 + 
+        2*a**2*p*(-2 + p + e**2*(2 + p)))*x**2*(-p**2 + a**2*(-1 + e)**2*(-1 + x**2))*
+        (-p**2 + a**2*(1 + e)**2*(-1 + x**2))*(-p**2 + a**2*(-1 + e**2)*(-1 + x**2)))
+    if x>=0:
+        numerator = a**2*(numerator_term1+2*a**2*p**2*(numerator_term2-4*sqrt(numerator_term3)))
+    else:
+        numerator = a**2*(numerator_term1+2*a**2*p**2*(numerator_term2+4*sqrt(numerator_term3)))
+    denominator = ((-4 + p)**2 * p**6 + a**8 * (-1 + e**2)**4 * (-1 + x**2)**2 + 
+         2 * a**2 * p**5 * ((-1 + e**2) * (4 + p) + (-4 + e**2 * (-12 + p) + 3 * p) * (1 - x**2)) + 
+         2 * a**6 * (-1 + e**2)**2 * p**2 * (-1 + x**2) * (-2 + 3 * x**2 + e**2 * (-2 + x**2)) + 
+         a**4 * p**3 * (-8 * (-1 + e**2)**2 * (1 - 3 * x**2 + 2 * x**4) + 
+         p * ((-1 + e**2)**2 - 4 * (-1 + e**4) * (-1 + x**2) + (3 + e**2)**2 * (-1 + x**2)**2)))
+    return numerator/denominator
+
+def _r3r4_sum(a, p, e, x):
+    if a != 0:
+        return (-p**2+a**2*(1-e**2)*(1-x**2))*(a**2-_r3r4_prod_reduced(a,p,e,x))/(2*a**2*p)
+    else:
+        return 2*p/(p-4)
+
+def _r3(a, p, e, x):
+    delta = _r3r4_sum(a,p,e,x)**2-4*_r3r4_prod(a,p,e,x)
+    return (_r3r4_sum(a,p,e,x)+sqrt(delta))/2
+
+def _r4(a, p, e, x):
+    delta = _r3r4_sum(a,p,e,x)**2-4*_r3r4_prod(a,p,e,x)
+    return (_r3r4_sum(a,p,e,x)-sqrt(delta))/2
+
+def _E2(a, p, e, x):
+    """
+    Squared energy
+    """
+    return 1-2*(1-e**2)/(2*p+(1-e**2)*_r3r4_sum(a,p,e,x))
+
+def _L2(a, p, e, x):
+    """
+    Squared angular momentum
+    """
+    numerator = 2*(a**2*(-1+e**2)+p**2)*(a**2-_r3r4_prod(a,p,e,x))+4*a**2*p*_r3r4_sum(a,p,e,x)
+    denominator = a**2*(2*p+(1-e**2)*_r3r4_sum(a,p,e,x))
+    return numerator/denominator
+
+def _del1y1(a, p, e, x):
+    numerator = -e*p*sqrt(_r3r4_sum(a,p,e,x)**2-4*_r3r4_prod(a,p,e,x))
+    denominator = (1-e**2)*_r3r4_prod(a,p,e,x)+p**2-p*_r3r4_sum(a,p,e,x)
+    return numerator/denominator
+
+def _del2y2(a, p, e, x):
+    numerator = (1-e**2)*a**4*(1-x**2)
+    denominator = (1-e**2)*a**4*(1-x**2)-2*p**2*_r3r4_prod_reduced(a,p,e,x)
+    return numerator/denominator
+
+def _y1y2(a, p, e, x):
+    numerator = 2*a**2*((1-e**2)*_r3r4_prod(a,p,e,x)+p**2-p*_r3r4_sum(a,p,e,x))
+    denominator = a**4*(e**2-1)*(1-x**2)+2*p**2*_r3r4_prod_reduced(a,p,e,x)
+    return numerator/denominator
+
+def _kr(a,p,e,x):
+    numerator = (p-p*(1-e)/(1+e))*(_r3(a,p,e,x)-_r4(a,p,e,x))
+    denominator = (p-_r3(a,p,e,x)*(1-e))*(p/(1+e)-_r4(a,p,e,x))
+    return numerator/denominator
+
+def _ktheta(a,p,e,x):
+    return (1-x**2)*(1-e**2)*a**4/(p**2*_r3r4_prod_reduced(a,p,e,x))
+
+def _rPlus(a):
+    return 1+sqrt(1-a**2)
+
+def _rMinus(a):
+    return 1-sqrt(1-a**2)
+
+def _hPlus(a,p,e,x):
+    numerator = (p-p*(1-e)/(1+e))*(_r3(a,p,e,x)-_rPlus(a))
+    denominator = (p-_r3(a,p,e,x)*(1-e))*(p/(1+e)-_rPlus(a))
+    return numerator/denominator
+
+def _hMinus(a,p,e,x):
+    numerator = (p-p*(1-e)/(1+e))*(_r3(a,p,e,x)-_rMinus(a))
+    denominator = (p-_r3(a,p,e,x)*(1-e))*(p/(1+e)-_rMinus(a))
+    return numerator/denominator
+
+def _phiTerm_thetaPrefactor(a,p,e,x):
+    numerator = (a**2*(-1+e**2)+p**2)*(a**2-_r3r4_prod(a,p,e,x))+2*a**2*p*_r3r4_sum(a,p,e,x)
+    denominator = p**2*_r3r4_prod_reduced(a,p,e,x)
+    return 2/pi*sqrt(numerator/denominator)
+
+def _phiTerm_rPrefactor(a,p,e,x):
+    term1 = 2*a/(pi*(_rPlus(a)-_rMinus(a)))
+    term2_numerator = 2*p+(1-e**2)*_r3r4_sum(a,p,e,x)
+    term2_denominator = 2*(p-_r3(a,p,e,x)*(1-e))*(p-_r4(a,p,e,x)*(1+e))
+    return term1*sqrt(term2_numerator/term2_denominator)
+
+def _phiTerm_rPrefactorPlus(a,p,e,x):
+    term1 = (2*sqrt(_E2(a,p,e,x))*_rPlus(a)-a*sign(x)*sqrt(abs(_L2(a,p,e,x))))/(_r3(a,p,e,x)-_rPlus(a))
+    term2 = ellipk(_kr(a,p,e,x))-(p/(1+e)-_r3(a,p,e,x))/(p/(1+e)-_rPlus(a))*_ellippi(_hPlus(a,p,e,x),_kr(a,p,e,x))
+    return term1*term2
+
+def _phiTerm_rPrefactorMinus(a,p,e,x):
+    term1 = (2*sqrt(_E2(a,p,e,x))*_rMinus(a)-a*sign(x)*sqrt(abs(_L2(a,p,e,x))))/(_r3(a,p,e,x)-_rMinus(a))
+    term2 = ellipk(_kr(a,p,e,x))-(p/(1+e)-_r3(a,p,e,x))/(p/(1+e)-_rMinus(a))*_ellippi(_hMinus(a,p,e,x),_kr(a,p,e,x))
+    return term1*term2
+
+def _phiTerm_thetaTerm(a,p,e,x):
+    return _phiTerm_thetaPrefactor(a,p,e,x)*_ellippi(1-x**2,_ktheta(a,p,e,x))
+
+def _phiTerm_rTerm(a,p,e,x):
+    return _phiTerm_rPrefactor(a,p,e,x)*(_phiTerm_rPrefactorPlus(a,p,e,x)-_phiTerm_rPrefactorMinus(a,p,e,x))
+
+## frequency ratios
 def _rtheta_frequencyRatio(a, p, e, x):
     """Ratio of r-frequency and theta-frequency  
 
@@ -36,25 +206,10 @@ def _rtheta_frequencyRatio(a, p, e, x):
     
     if a == 1:
         raise ValueError("Extreme Kerr not supported")
-    
-    
-    if e == 1:
-        raise ValueError("Marginally bound orbits not supported")
-    if not valid_params(a, e, x):
-        raise ValueError("a^2, e and x^2 must be between 0 and 1")
-    if not is_stable(a, p, e, x):
+    if not is_stable(a,p,e,x):
         raise ValueError("Not a stable orbit")
+    return sqrt(_y1y2(a,p,e,x))*elliprf(0, 1+_del2y2(a,p,e,x), 1-_del2y2(a,p,e,x))/elliprf(0, 1+_del1y1(a,p,e,x), 1-_del1y1(a,p,e,x))
 
-    r1, r2, r3, r4 = stable_radial_roots(a, p, e, x)
-    z_minus, z_plus = stable_polar_roots(a, p, e, x)
-
-    y1 = (p**2-p*(r3+r4))/(1-e**2)+r3*r4
-    y2 = a**2/2*(2*z_plus-z_minus)
-    d1 = e*p*(r4-r3)/(1-e**2)
-    d2 = -a**2*z_minus/2
-
-    return sign(x)*sqrt(y1/y2)*elliprf(0, 1+d2/y2, 1-d2/y2)/elliprf(0, 1+d1/y1, 1-d1/y1)
-    
 def _rphi_frequencyRatio(a, p, e, x):
     """Ratio of r-frequency and phi-frequency 
 
@@ -77,50 +232,12 @@ def _rphi_frequencyRatio(a, p, e, x):
     
     if a == 1:
         raise ValueError("Extreme Kerr not supported")
-    if x == 0:
-        raise ValueError("Polar orbits not supported")
-    if e == 1:
-        raise ValueError("Marginally bound orbits not supported")
-    if not valid_params(a, e, x):
-        raise ValueError("a^2, e and x^2 must be between 0 and 1")
-    if not is_stable(a, p, e, x):
+    if not is_stable(a,p,e,x):
         raise ValueError("Not a stable orbit")
-    
-    r1, r2, r3, r4 = stable_radial_roots(a, p, e, x)
-    z_minus, z_plus = stable_polar_roots(a, p, e, x)
-    E, L, Q = constants_of_motion(a, p, e, x)
-    
-    r_plus = 1 + sqrt(1 - a**2)
-    r_minus = 1 - sqrt(1 - a**2)
-
-    k_r = sqrt((r1 - r2) * (r3 - r4) / ((r1 - r3) * (r2 - r4)))
-    k_theta = sqrt(z_minus / z_plus)
-    h_plus = (r1 - r2) * (r3 - r_plus) / ((r1 - r3) * (r2 - r_plus))
-    h_minus = (r1 - r2) * (r3 - r_minus) / ((r1 - r3) * (r2 - r_minus))
-    
-    # simplified form of epsilon0*z_plus
-    e0zp = (a**2 * (1 - E**2) * (1 - z_minus) + L**2) / (L**2 * (1 - z_minus))
-    
-    #theta-r ratio
-    y1 = (p**2-p*(r3+r4))/(1-e**2)+r3*r4
-    y2 = a**2/2*(2*z_plus-z_minus)
-    d1 = e*p*(r4-r3)/(1-e**2)
-    d2 = -a**2*z_minus/2
-    thetar_ratio = sign(x)*sqrt(y2/y1)*elliprf(0, 1+d1/y1,1-d1/y1)/elliprf(0, 1+d2/y2, 1-d2/y2)
-    
-    #coefficients
-    Btheta = 2 / (pi * sqrt(e0zp)) * _ellippi(z_minus, k_theta**2)
-    Br = 2 * a / (
-        pi * (r_plus - r_minus) * sqrt((1 - E**2) * (r1 - r3) * (r2 - r4))
-    ) * (
-        (2 * E * r_plus - a * L)
-        / (r3 - r_plus)
-        * (ellipk(k_r**2) - (r2 - r3) / (r2 - r_plus) * _ellippi(h_plus, k_r**2))
-        - (2 * E * r_minus - a * L)
-        / (r3 - r_minus)
-        * (ellipk(k_r**2) - (r2 - r3) / (r2 - r_minus) * _ellippi(h_minus, k_r**2))
-    )
-    return 1/(Btheta*thetar_ratio+Br)
+    if x != 0: 
+        return sign(x)/(sign(x)*_phiTerm_thetaTerm(a,p,e,x)/_rtheta_frequencyRatio(a,p,e,x)+_phiTerm_rTerm(a,p,e,x))
+    else:
+        return [1/(1/_rtheta_frequencyRatio(a,p,e,x)+_phiTerm_rTerm(a,p,e,x)), -1/(-1/_rtheta_frequencyRatio(a,p,e,x)+_phiTerm_rTerm(a,p,e,x))]
 
 def _phitheta_frequencyRatio(a, p, e, x):
     """Ratio of r-frequency and phi-frequency 
@@ -144,50 +261,12 @@ def _phitheta_frequencyRatio(a, p, e, x):
     
     if a == 1:
         raise ValueError("Extreme Kerr not supported")
-    if x == 0:
-        raise ValueError("Polar orbits not supported")
-    if e == 1:
-        raise ValueError("Marginally bound orbits not supported")
-    if not valid_params(a, e, x):
-        raise ValueError("a^2, e and x^2 must be between 0 and 1")
-    if not is_stable(a, p, e, x):
+    if not is_stable(a,p,e,x):
         raise ValueError("Not a stable orbit")
-    
-    r1, r2, r3, r4 = stable_radial_roots(a, p, e, x)
-    z_minus, z_plus = stable_polar_roots(a, p, e, x)
-    E, L, Q = constants_of_motion(a, p, e, x)
-    
-    r_plus = 1 + sqrt(1 - a**2)
-    r_minus = 1 - sqrt(1 - a**2)
-
-    k_r = sqrt((r1 - r2) * (r3 - r4) / ((r1 - r3) * (r2 - r4)))
-    k_theta = sqrt(z_minus / z_plus)
-    h_plus = (r1 - r2) * (r3 - r_plus) / ((r1 - r3) * (r2 - r_plus))
-    h_minus = (r1 - r2) * (r3 - r_minus) / ((r1 - r3) * (r2 - r_minus))
-    
-    #simplified form of epsilon0*z_plus
-    e0zp = (a**2 * (1 - E**2) * (1 - z_minus) + L**2) / (L**2 * (1 - z_minus))
-    
-    #theta-r ratio
-    y1 = (p**2-p*(r3+r4))/(1-e**2)+r3*r4
-    y2 = a**2/2*(2*z_plus-z_minus)
-    d1 = e*p*(r4-r3)/(1-e**2)
-    d2 = -a**2*z_minus/2
-    rtheta_ratio = sign(x)*sqrt(y1/y2)*elliprf(0, 1+d2/y2,1-d2/y2)/elliprf(0, 1+d1/y1, 1-d1/y1)
-    
-    #coefficients
-    Btheta = 2 / (pi * sqrt(e0zp)) * _ellippi(z_minus, k_theta**2)
-    Br = 2 * a / (
-        pi * (r_plus - r_minus) * sqrt((1 - E**2) * (r1 - r3) * (r2 - r4))
-    ) * (
-        (2 * E * r_plus - a * L)
-        / (r3 - r_plus)
-        * (ellipk(k_r**2) - (r2 - r3) / (r2 - r_plus) * _ellippi(h_plus, k_r**2))
-        - (2 * E * r_minus - a * L)
-        / (r3 - r_minus)
-        * (ellipk(k_r**2) - (r2 - r3) / (r2 - r_minus) * _ellippi(h_minus, k_r**2))
-    )
-    return Btheta+Br*rtheta_ratio
+    if x != 0: 
+        return _phiTerm_thetaTerm(a,p,e,x)+sign(x)*_rtheta_frequencyRatio(a,p,e,x)*_phiTerm_rTerm(a,p,e,x)
+    else:
+        return [1+_rtheta_frequencyRatio(a,p,e,x)*_phiTerm_rTerm(a,p,e,x),1-_rtheta_frequencyRatio(a,p,e,x)*_phiTerm_rTerm(a,p,e,x)]
 
 # Finding resonance
 ## In general 
@@ -209,25 +288,27 @@ def _doubleResonance_solver(equation, p0, sep):
     p : double
         orbital semi-latus rectum
     '''    
-    try:
-        p_sol = newton(equation, p0)
-    except (RuntimeError, ValueError, RuntimeWarning):
+    if p0 < sep:
         try:
-            p_sol = root_scalar(equation, method="brentq", bracket=(sep+1e-5, p0)).root
+            return newton(equation, sep+1e-5)
+        except (RuntimeError, ValueError):
+            pass
+    try:
+        return newton(equation, p0)
+    except (RuntimeError, ValueError):
+        try:
+            return root_scalar(equation, method="brentq", bracket=(sep+1e-5, p0)).root
         except:
             try:
-                p_sol = newton(equation, sep+1e-5)
-            except (RuntimeError, ValueError, RuntimeWarning):
+                return newton(equation, sep+1e-5)
+            except (RuntimeError, ValueError):
                 pass
-            else:
-                return p_sol
-        else:
-            return p_sol
-    else:
-        return p_sol
-    raise RuntimeError("p is too close to the separatrix")
-    
-def rtheta_resonance(ratio, a, e, x):
+    print("p is too close to the separatrix or no resonance. The result is set to sep+1e-5")
+    return sep+1e-5
+
+# find resonance
+## r-theta resonance
+def _rtheta_resonance_p(a, e, x, rInteger, thetaInteger):
     """Return p of r-theta resonant orbit
     
     Parameters
@@ -248,23 +329,104 @@ def rtheta_resonance(ratio, a, e, x):
     """
     
     a, x = _standardize_params(a, x)
-    
-    if not valid_frequencyRatio(ratio):
-        raise ValueError("The ratio must be between 0 and 1")
+    if not valid_integers(rInteger, thetaInteger, 0):
+        raise ValueError("Require |rInteger| > |thetaInteger|, |rInteger| > |phiInteger| and thetaInteger*phiInteger>0")
     if a == 1:
-        raise ValueError("Extreme Kerr not supported")
-    if x == 0:
-        raise ValueError("Polar orbits not supported")
-    if e == 1:
-        raise ValueError("Marginally bound orbits not supported")
-    if not valid_params(a, e, x):
-        raise ValueError("a^2, e and x^2 must be between 0 and 1")
-
-    return _doubleResonance_solver(lambda p: abs(_rtheta_frequencyRatio(a, p, e, x))-ratio,
+        raise ValueError("Extreme Kerr not supported") 
+    ratio = rInteger/thetaInteger
+    if sign(x)*sign(ratio)<0:
+            raise ValueError("Require sign(x) = sign(rInteger/thetaInteger)")
+    return _doubleResonance_solver(lambda p: _rtheta_frequencyRatio(a, p, e, x)-abs(ratio),
                                    6/(1-ratio**2),
                                    separatrix(a, e, x))
 
-def rphi_resonance(ratio, a, e, x):
+def _rtheta_resonance_e(a, p, x, rInteger, thetaInteger):
+    """Return p of r-theta resonant orbit
+    
+    Parameters
+    ----------
+    ratio: double
+        r-theta frequency ratio
+    a : double
+        dimensionless spin of the black hole
+    e : double
+        orbital eccentricity
+    x : double
+        cosine of the orbital inclination
+
+    Returns
+    -------
+    p : double
+        orbital semi-latus rectum
+    """
+    
+    a, x = _standardize_params(a, x)
+    if not valid_integers(rInteger, thetaInteger, 0):
+        raise ValueError("Require |rInteger| > |thetaInteger|, |rInteger| > |phiInteger| and thetaInteger*phiInteger>0")
+    if a == 1:
+        raise ValueError("Extreme Kerr not supported") 
+    ratio = rInteger/thetaInteger
+    if sign(x)*sign(ratio)<0:
+            raise ValueError("Require sign(x) = sign(rInteger/thetaInteger)")
+    p0 = _rtheta_resonance_p(a, 0, x, rInteger, thetaInteger)
+    p1 = _rtheta_resonance_p(a, 1, x, rInteger, thetaInteger)
+    if (p<p0)|(p1<p):
+        print(f"p must be in [{p0:f},{p1:f}]")
+        return nan
+    if p == p0:
+        return 0
+    elif p == p1:
+        return 1
+    else:
+        e0 = (p-p0)/(p1-p0)
+        return newton(lambda e: _rtheta_frequencyRatio(a, p, e, x)-abs(ratio), e0)
+
+def _rtheta_resonance_x(a, p, e, rInteger, thetaInteger):
+    """Return p of r-theta resonant orbit
+    
+    Parameters
+    ----------
+    ratio: double
+        r-theta frequency ratio
+    a : double
+        dimensionless spin of the black hole
+    e : double
+        orbital eccentricity
+    x : double
+        cosine of the orbital inclination
+
+    Returns
+    -------
+    p : double
+        orbital semi-latus rectum
+    """
+    
+    a = abs(a)
+    if not valid_integers(rInteger, thetaInteger, 0):
+        raise ValueError("Require |rInteger| > |thetaInteger|, |rInteger| > |phiInteger| and thetaInteger*phiInteger>0")
+    if a == 1:
+        raise ValueError("Extreme Kerr not supported") 
+    ratio = rInteger/thetaInteger
+    Lz_sign = sign(ratio)
+    p0 = _rtheta_resonance_p(a, e, 0, rInteger, thetaInteger)
+    p1 = _rtheta_resonance_p(a, e, Lz_sign, rInteger, thetaInteger)
+    if (ratio>0)&((p<p1)|(p0<p)):
+        print(f"p must be in [{p1:f},{p0:f}]")
+        return nan
+    if (ratio<0)&((p<p0)|(p1<p)):
+        print(f"p must be in [{p0:f},{p1:f}]")
+        return nan
+    if p == p0:
+        return 0
+    elif p == p1:
+        return 1
+    else:
+        x0 = Lz_sign*(p-p0)/(p1-p0)
+        return newton(lambda x: _rtheta_frequencyRatio(a, p, e, x)-abs(ratio), x0)
+
+## r-phi resonance
+
+def _rphi_resonance_p(a, e, x, rInteger, phiInteger):
     """Return p of r-phi resonant orbit
 
     Parameters
@@ -285,23 +447,117 @@ def rphi_resonance(ratio, a, e, x):
     """
     
     a, x = _standardize_params(a, x)
-    
-    if not valid_frequencyRatio(ratio):
-        raise ValueError("The ratio must be between 0 and 1")
+    if not valid_integers(rInteger, 0, phiInteger):
+        raise ValueError("Require |rInteger| > |thetaInteger|, |rInteger| > |phiInteger| and thetaInteger*phiInteger>0")
     if a == 1:
         raise ValueError("Extreme Kerr not supported")
+    ratio = rInteger/phiInteger
     if x == 0:
-        raise ValueError("Polar orbits not supported")
-    if e == 1:
-        raise ValueError("Marginally bound orbits not supported")
-    if not valid_params(a, e, x):
-        raise ValueError("a^2, e and x^2 must be between 0 and 1")
+        if ratio > 0:
+            resonantEquation = lambda p: _rphi_frequencyRatio(a, p, e, 0)[0]-abs(ratio)
+        elif ratio < 0:
+            resonantEquation = lambda p: _rphi_frequencyRatio(a, p, e, 0)[1]-abs(ratio)
+    else:
+        if sign(x)*sign(ratio)<0:
+            raise ValueError("Require sign(x) = sign(rInteger/phiInteger)")
+        resonantEquation = lambda p: _rphi_frequencyRatio(a, p, e, x)-abs(ratio)
+    p0 = 6/(1-ratio**2)
+    pSep = separatrix(a, e, x)
+    return _doubleResonance_solver(resonantEquation, p0, pSep)
 
-    return _doubleResonance_solver(lambda p: abs(_rphi_frequencyRatio(a, p, e, x))-ratio,
-                                   6/(1-ratio**2),
-                                   separatrix(a, e, x))
+def _rphi_resonance_e(a, p, x, rInteger, phiInteger):
+    """Return p of r-phi resonant orbit
 
-def phitheta_resonance(ratio, a, e, x):
+    Parameters
+    ----------
+    ratio: double
+        r-phi frequency ratio
+    a : double
+        dimensionless spin of the black hole
+    e : double
+        orbital eccentricity
+    x : double
+        cosine of the orbital inclination
+
+    Returns
+    -------
+    p : double
+        orbital semi-latus rectum
+    """
+    
+    a, x = _standardize_params(a, x)
+    if not valid_integers(rInteger, 0, phiInteger):
+        raise ValueError("Require |rInteger| > |thetaInteger|, |rInteger| > |phiInteger| and thetaInteger*phiInteger>0")
+    if a == 1:
+        raise ValueError("Extreme Kerr not supported")
+    ratio = rInteger/phiInteger
+    p0 = _rphi_resonance_p(a, 0, x, rInteger, phiInteger)
+    p1 = _rphi_resonance_p(a, 1, x, rInteger, phiInteger)
+    if (p<p0)|(p1<p):
+        print(f"p must be in [{p0:f},{p1:f}]")
+        return nan
+    if p == p0:
+        return 0
+    if p == p1:
+        return 1
+    e0 = (p-p0)/(p1-p0)
+    if x == 0:
+        if ratio > 0:
+            resonantEquation = lambda e: _rphi_frequencyRatio(a, p, e, x)[0]-abs(ratio)
+        elif ratio < 0:
+            resonantEquation = lambda e: _rphi_frequencyRatio(a, p, e, x)[1]-abs(ratio)
+    else:
+        if sign(x)*sign(ratio)<0:
+            raise ValueError("Require sign(x) = sign(rInteger/phiInteger)")
+        resonantEquation = lambda e: _rphi_frequencyRatio(a, p, e, x)-abs(ratio)
+    return newton(resonantEquation, e0)
+
+def _rphi_resonance_x(a, p, e, rInteger, phiInteger):
+    """Return p of r-phi resonant orbit
+
+    Parameters
+    ----------
+    ratio: double
+        r-phi frequency ratio
+    a : double
+        dimensionless spin of the black hole
+    e : double
+        orbital eccentricity
+    x : double
+        cosine of the orbital inclination
+
+    Returns
+    -------
+    p : double
+        orbital semi-latus rectum
+    """
+    
+    a = abs(a)
+    if not valid_integers(rInteger, 0, phiInteger):
+        raise ValueError("Require |rInteger| > |thetaInteger|, |rInteger| > |phiInteger| and thetaInteger*phiInteger>0")
+    if a == 1:
+        raise ValueError("Extreme Kerr not supported")
+    ratio = rInteger/phiInteger
+    Lz_sign = sign(ratio)
+    p0 = _rphi_resonance_p(a, e, 0, rInteger, phiInteger)
+    p1 = _rphi_resonance_p(a, e, Lz_sign, rInteger, phiInteger)
+    if (ratio>0)&((p<p1)|(p0<p)):
+        print(f"p must be in [{p1:f},{p0:f}]")
+        return nan
+    if (ratio<0)&((p<p0)|(p1<p)):
+        print(f"p must be in [{p0:f},{p1:f}]")
+        return nan
+    if p == p0:
+        return 0
+    if p == p1:
+        return 1
+    x0 = Lz_sign*(p-p0)/(p1-p0)
+    resonantEquation = lambda x: _rphi_frequencyRatio(a, p, e, x)-abs(ratio)
+    return newton(resonantEquation, x0)
+
+## phi-theta resonance
+
+def _phitheta_resonance_p(a, e, x, thetaInteger, phiInteger):
     """Return p of phi-theta resonant orbit
 
     Parameters
@@ -322,360 +578,120 @@ def phitheta_resonance(ratio, a, e, x):
     """
     
     a, x = _standardize_params(a, x)
-    if (ratio <= 0) | (ratio == 1):
-        raise ValueError("The ratio must be positive and not equal to 1")
-    if (ratio > 1) & (x < 0):
-        raise ValueError("The ratio must be larger than 1 if the orbit is prograde")
-    if (ratio < 1) & (x > 0):
-        raise ValueError("The ratio must be lesser than 1 if the orbit is retrograde")
+    if not valid_integers(0, thetaInteger, phiInteger):
+        raise ValueError("Require |rInteger| > |thetaInteger|, |rInteger| > |phiInteger| and thetaInteger*phiInteger>0")
     if a == 1:
         raise ValueError("Extreme Kerr not supported")
-    if x == 0:
-        raise ValueError("Polar orbits not supported")
-    if e == 1:
-        raise ValueError("Marginally bound orbits not supported")
     if not valid_params(a, e, x):
         raise ValueError("a^2, e and x^2 must be between 0 and 1")
+    ratio = phiInteger/thetaInteger
+    if x == 0:
+        if ratio > 1:
+            resonantEquation = lambda p: _phitheta_frequencyRatio(a, p, e, 0)[0]-ratio
+        elif ratio < 1:
+            resonantEquation = lambda p: _phitheta_frequencyRatio(a, p, e, 0)[1]-ratio
+    else:
+        if sign(x)*sign(ratio-1)<0:
+            raise ValueError("Require sign(x) = sign(phiInteger/thetaInteger-1)")
+        resonantEquation = lambda p: _phitheta_frequencyRatio(a, p, e, x)-ratio
+    p0 = (2*a/abs(ratio-1))**(2/3)
+    pSep = separatrix(a, e, x)
+    return _doubleResonance_solver(resonantEquation, p0, pSep)
 
-    return _doubleResonance_solver(lambda p: abs(_phitheta_frequencyRatio(a, p, e, x))-ratio,
-                                   (2*a/abs(ratio-1))**(2/3),
-                                   separatrix(a, e, x))
+def _phitheta_resonance_e(a, p, x, thetaInteger, phiInteger):
+    """Return p of r-phi resonant orbit
 
-# Frequency ratio of r-theta and r-phi in special limits (support finding triple resonance)
-## In the polar limit
-def rtheta_frequencyRatio_polarLimit(a, p, e, is_prograde=True):
-    """Ratio of r-frequency and theta-frequency in the polar limit
-    
     Parameters
     ----------
+    ratio: double
+        r-phi frequency ratio
     a : double
         dimensionless spin of the black hole
-    p : double
-        orbital semi-latus rectum
     e : double
         orbital eccentricity
-    is_prograde : bool
-        True (default) if the orbit is prograde. Otherwise, the orbit is retrograde
+    x : double
+        cosine of the orbital inclination
 
     Returns
     -------
-    double
+    p : double
+        orbital semi-latus rectum
+    """
+    
+    a, x = _standardize_params(a, x)
+    if not valid_integers(0, thetaInteger, phiInteger):
+        raise ValueError("Require |rInteger| > |thetaInteger|, |rInteger| > |phiInteger| and thetaInteger*phiInteger>0")
+    if a == 1:
+        raise ValueError("Extreme Kerr not supported")
+    ratio = phiInteger/thetaInteger
+    p0 = _phitheta_resonance_p(a, 0, x, thetaInteger, phiInteger)
+    p1 = _phitheta_resonance_p(a, 1, x, thetaInteger, phiInteger)
+    if (p<p0)|(p1<p):
+        print(f"p must be in [{p0:f},{p1:f}]")
+        return nan
+    if p == p0:
+        return 0
+    if p == p1:
+        return 1
+    e0 = (p-p0)/(p1-p0)
+    if x == 0:
+        if ratio > 1:
+            resonantEquation = lambda e: _phitheta_frequencyRatio(a, p, e, x)[0]-abs(ratio)
+        elif ratio < 1:
+            resonantEquation = lambda e: _phitheta_frequencyRatio(a, p, e, x)[1]-abs(ratio)
+    else:
+        if sign(x)*sign(ratio-1)<0:
+            raise ValueError("Require sign(x) = sign(phiInteger/thetaInteger-1)")
+        resonantEquation = lambda e: _phitheta_frequencyRatio(a, p, e, x)-abs(ratio)
+    return newton(resonantEquation, e0)
+
+def _phitheta_resonance_x(a, p, e, thetaInteger, phiInteger):
+    """Return p of r-phi resonant orbit
+
+    Parameters
+    ----------
+    ratio: double
+        r-phi frequency ratio
+    a : double
+        dimensionless spin of the black hole
+    e : double
+        orbital eccentricity
+    x : double
+        cosine of the orbital inclination
+
+    Returns
+    -------
+    p : double
+        orbital semi-latus rectum
     """
     
     a = abs(a)
+    
+    if not valid_integers(0, thetaInteger, phiInteger):
+        raise ValueError("Require |rInteger| > |thetaInteger|, |rInteger| > |phiInteger| and thetaInteger*phiInteger>0")
     if a == 1:
         raise ValueError("Extreme Kerr not supported")
-    if e == 1:
-        raise ValueError("Marginally bound orbits not supported")
-    if not valid_params(a, e, 0.5):
-        raise ValueError("a^2, e and x^2 must be between 0 and 1")
-    
-    Lz_sign = -1+2*int(is_prograde)
-    P = (a**2*(a**4*(-1+e**2)*2+p**4+2*a**2*p*(-2+p+e**2*(2+p)))
-         )/(
-             a**4*(-1+e**2)**2+2*a**2*(1+e**2)*p**2+(-4+p)*p**3)
-    S = (2*(a**2*(-1+e**2)+p**2)**2
-         )/(
-            a**4*(-1+e**2)**2+2*a**2*(1+e**2)*p**2+(-4+p)*p**3)
-    r1 = p/(1-e)
-    r2 = p/(1+e)
-    r3 = (S+sqrt(S**2-4*P))/2
-    r4 = (S-sqrt(S**2-4*P))/2
-    E2 = 1+2*(-1+e**2)/(2*p+S-e**2*S)
-    Q = 2*p**2*P/(a**2*(2*p+S-e**2*S))
-    #L2 = 0
-    #z2 = 1
-    #z1 = Q/(1-E2)/a**2/z2
-    k_r = (r1-r2)/(r1-r3)*(r3-r4)/(r2-r4)
-    k_theta = (1-E2)*a**2/Q
-    factor = Lz_sign*sqrt((r1-r3)*(r2-r4)*2*(1-e**2)*a**2/(2*p**2*P))
-    return factor*ellipk(k_theta)/ellipk(k_r)
-
-def rphi_frequencyRatio_polarLimit(a, p, e, is_prograde=True):
-    """Ratio of r-frequency and phi-frequency in the polar limit
-    
-    Parameters
-    ----------
-    a : double
-        dimensionless spin of the black hole
-    p : double
-        orbital semi-latus rectum
-    e : double
-        orbital eccentricity
-    is_prograde : bool
-        True (default) if the orbit is prograde. Otherwise, the orbit is retrograde
-
-    Returns
-    -------
-    double
-    """
-    Lz_sign = -1+2*int(is_prograde)
-    P = (a**2*(a**4*(-1+e**2)*2+p**4+2*a**2*p*(-2+p+e**2*(2+p)))
-         )/(
-             a**4*(-1+e**2)**2+2*a**2*(1+e**2)*p**2+(-4+p)*p**3)
-    S = (2*(a**2*(-1+e**2)+p**2)**2
-         )/(
-            a**4*(-1+e**2)**2+2*a**2*(1+e**2)*p**2+(-4+p)*p**3)
-    r1 = p/(1-e)
-    r2 = p/(1+e)
-    r3 = (S+sqrt(S**2-4*P))/2
-    r4 = (S-sqrt(S**2-4*P))/2
-    E2 = 1+2*(-1+e**2)/(2*p+S-e**2*S)
-    Q = 2*p**2*P/(a**2*(2*p+S-e**2*S))
-    #L2 = 0
-    #z2 = 1
-    #z1 = Q/(1-E2)/a**2/z2
-    
-    k_r = (r1-r2)/(r1-r3)*(r3-r4)/(r2-r4)
-    k_theta = (1-E2)*a**2/Q
-    factor1 = Lz_sign*sqrt((r1-r3)*(r2-r4)*2*(1-e**2)*a**2/(2*p**2*P))
-    rtheta_ratio = factor1*ellipk(k_theta)/ellipk(k_r)
-    
-    r_plus = 1+sqrt(1-a**2)
-    r_minus = 1-sqrt(1-a**2)
-    h_r = (r1-r2)/(r1-r3)
-    h_plus = h_r*(r3-r_plus)/(r2-r_plus)
-    h_minus = h_r*(r3-r_minus)/(r2-r_minus)
-    factor2 = 2*a/(pi*(r_plus-r_minus)*sqrt((1-E2)*(r1-r3)*(r2-r4)))*2*sqrt(E2)
-    B_r_plus = r_plus/(r3-r_plus)*(ellipk(k_r)-(r2-r3)/(r2-r_plus)*_ellippi(h_plus, k_r))
-    B_r_minus = r_minus/(r3-r_minus)*(ellipk(k_r)-(r2-r3)/(r2-r_minus)*_ellippi(h_minus, k_r))
-    B_r = factor2*(B_r_plus-B_r_minus)
-    #B_theta = 1
-    return 1/(B_r+1/rtheta_ratio)
-
-def phitheta_frequencyRatio_polarLimit(a, p, e, is_prograde=True):
-    """Ratio of phi-frequency and theta-frequency in the polar limit
-    
-    Parameters
-    ----------
-    a : double
-        dimensionless spin of the black hole
-    p : double
-        orbital semi-latus rectum
-    e : double
-        orbital eccentricity
-    is_prograde : bool
-        True (default) if the orbit is prograde. Otherwise, the orbit is retrograde
-
-    Returns
-    -------
-    double
-    """
-    a = abs(a)
-    if a == 1:
-        raise ValueError("Extreme Kerr not supported")
-    if e == 1:
-        raise ValueError("Marginally bound orbits not supported")
-    if not valid_params(a, e, 0.5):
-        raise ValueError("a^2, e and x^2 must be between 0 and 1")
-    
-    Lz_sign = -1+2*int(is_prograde)
-    P = (a**2*(a**4*(-1+e**2)*2+p**4+2*a**2*p*(-2+p+e**2*(2+p)))
-         )/(
-             a**4*(-1+e**2)**2+2*a**2*(1+e**2)*p**2+(-4+p)*p**3)
-    S = (2*(a**2*(-1+e**2)+p**2)**2
-         )/(
-            a**4*(-1+e**2)**2+2*a**2*(1+e**2)*p**2+(-4+p)*p**3)
-    r1 = p/(1-e)
-    r2 = p/(1+e)
-    r3 = (S+sqrt(S**2-4*P))/2
-    r4 = (S-sqrt(S**2-4*P))/2
-    E2 = 1+2*(-1+e**2)/(2*p+S-e**2*S)
-    Q = 2*p**2*P/(a**2*(2*p+S-e**2*S))
-    #L2 = 0
-    #z2 = 1
-    #z1 = Q/(1-E2)/a**2/z2
-    
-    k_r = (r1-r2)/(r1-r3)*(r3-r4)/(r2-r4)
-    k_theta = (1-E2)*a**2/Q
-    factor1 = Lz_sign*sqrt((r1-r3)*(r2-r4)*2*(1-e**2)*a**2/(2*p**2*P))
-    rtheta_ratio = factor1*ellipk(k_theta)/ellipk(k_r)
-    
-    r_plus = 1+sqrt(1-a**2)
-    r_minus = 1-sqrt(1-a**2)
-    h_r = (r1-r2)/(r1-r3)
-    h_plus = h_r*(r3-r_plus)/(r2-r_plus)
-    h_minus = h_r*(r3-r_minus)/(r2-r_minus)
-    factor2 = 2*a/(pi*(r_plus-r_minus)*sqrt((1-E2)*(r1-r3)*(r2-r4)))*2*sqrt(E2)
-    B_r_plus = r_plus/(r3-r_plus)*(ellipk(k_r)-(r2-r3)/(r2-r_plus)*_ellippi(h_plus, k_r))
-    B_r_minus = r_minus/(r3-r_minus)*(ellipk(k_r)-(r2-r3)/(r2-r_minus)*_ellippi(h_minus, k_r))
-    B_r = factor2*(B_r_plus-B_r_minus)
-    #B_theta = 1
-    return B_r*rtheta_ratio+1
-
-
-## In the equatorial limit
-def rtheta_frequencyRatio_equatorialLimit(a, p, e, is_prograde=True):
-    """Ratio of r-frequency and theta-frequency in the equatorial limit
-    
-    Parameters
-    ----------
-    a : double
-        dimensionless spin of the black hole
-    p : double
-        orbital semi-latus rectum
-    e : double
-        orbital eccentricity
-    is_prograde : bool
-        True (default) if the orbit is prograde. Otherwise, the orbit is retrograde
-
-    Returns
-    -------
-    double
-    """
-    a = abs(a)
-    if a == 1:
-        raise ValueError("Extreme Kerr not supported")
-    if e == 1:
-        raise ValueError("Marginally bound orbits not supported")
-    if not valid_params(a, e, 0.5):
-        raise ValueError("a^2, e and x^2 must be between 0 and 1")
-    
-    Lz_sign = -1+2*int(is_prograde)
-    P = 0
-    S = 2*(a**4*(-1+e**2)*p+(-4+p)*p**3+a**2*p**2*(3+e**2+p)
-           -Lz_sign*2*sqrt(a**2*p**3*(a**4*(-1+e**2)**2+(-4*e**2+(-2+p)**2)*p**2+2*a**2*p*(-2+p+e**2*(2+p))))
-           )/(
-               a**4*(-1+e**2)**2+(-4+p)**2*p**2+2*a**2*(-1+e**2)*p*(4+p)
-           )
-    P = 0
-    r1 = p/(1-e)
-    r2 = p/(1+e)
-    r3 = (S+sqrt(S**2-4*P))/2
-    r4 = (S-sqrt(S**2-4*P))/2
-    E2 = 1+2*(-1+e**2)/(2*p+S-e**2*S)
-    L2 = (2*(a**2*(-1+e**2)+p**2)*(a**2-P)+4*a**2*p*S)/(a**2*(2*p+S-e**2*S))
-    #Q = 0
-    #z_minus = 0
-    z_plus = -(p**2+2*p*S)/(a**2*(-1+e**2))
-    k_r = (r1-r2)/(r1-r3)*(r3-r4)/(r2-r4)
-    k_theta = 0
-    factor = Lz_sign*sqrt((r1-r3)*(r2-r4)/(a**2*z_plus))
-    return factor*ellipk(k_theta)/ellipk(k_r)
-
-def rphi_frequencyRatio_equatorialLimit(a, p, e, is_prograde=True):
-    """Ratio of r-frequency and phi-frequency in the equatorial limit
-    
-    Parameters
-    ----------
-    a : double
-        dimensionless spin of the black hole
-    p : double
-        orbital semi-latus rectum
-    e : double
-        orbital eccentricity
-    is_prograde : bool
-        True (default) if the orbit is prograde. Otherwise, the orbit is retrograde
-
-    Returns
-    -------
-    double
-    """
-    a = abs(a)
-    if a == 1:
-        raise ValueError("Extreme Kerr not supported")
-    if e == 1:
-        raise ValueError("Marginally bound orbits not supported")
-    if not valid_params(a, e, 0.5):
-        raise ValueError("a^2, e and x^2 must be between 0 and 1")
-    
-    Lz_sign = -1+2*int(is_prograde)
-    P = 0
-    S = 2*(a**4*(-1+e**2)*p+(-4+p)*p**3+a**2*p**2*(3+e**2+p)
-           -Lz_sign*2*sqrt(a**2*p**3*(a**4*(-1+e**2)**2+(-4*e**2+(-2+p)**2)*p**2+2*a**2*p*(-2+p+e**2*(2+p))))
-           )/(
-               a**4*(-1+e**2)**2+(-4+p)**2*p**2+2*a**2*(-1+e**2)*p*(4+p)
-           )
-    P = 0
-    r1 = p/(1-e)
-    r2 = p/(1+e)
-    r3 = (S+sqrt(S**2-4*P))/2
-    r4 = (S-sqrt(S**2-4*P))/2
-    E2 = 1+2*(-1+e**2)/(2*p+S-e**2*S)
-    L2 = (2*(a**2*(-1+e**2)+p**2)*(a**2-P)+4*a**2*p*S)/(a**2*(2*p+S-e**2*S))
-    #Q = 0
-    z_minus = 0
-    z_plus = -(p**2+2*p*S)/(a**2*(-1+e**2))
-    k_r = (r1-r2)/(r1-r3)*(r3-r4)/(r2-r4)
-    k_theta = 0
-    factor1 = Lz_sign*sqrt((r1-r3)*(r2-r4)/(a**2*z_plus))
-    rtheta_ratio = factor1*ellipk(k_theta)/ellipk(k_r)
-
-    r_plus = 1+sqrt(1-a**2)
-    r_minus = 1-sqrt(1-a**2)
-    h_r = (r1-r2)/(r1-r3)
-    h_plus = h_r*(r3-r_plus)/(r2-r_plus)
-    h_minus = h_r*(r3-r_minus)/(r2-r_minus)
-    factor2 = 2*a/(pi*(r_plus-r_minus)*sqrt((1-E2)*(r1-r3)*(r2-r4)))
-    B_theta = 2*_ellippi(z_minus, k_theta)*sqrt(L2)/(pi*sqrt((1-E2)*a**2*z_plus))
-    B_r_plus = (2*sqrt(E2)*r_plus-Lz_sign*a*sqrt(L2))/(r3-r_plus)*(ellipk(k_r)-(r2-r3)/(r2-r_plus)*_ellippi(h_plus, k_r))
-    B_r_minus = (2*sqrt(E2)*r_minus-Lz_sign*a*sqrt(L2))/(r3-r_minus)*(ellipk(k_r)-(r2-r3)/(r2-r_minus)*_ellippi(h_minus, k_r))
-    B_r = factor2*(B_r_plus-B_r_minus)
-    return 1/(B_r+B_theta/rtheta_ratio)    
-
-def phitheta_frequencyRatio_equatorialLimit(a, p, e, is_prograde=True):
-    """Ratio of phi-frequency and theta-frequency in the equatorial limit
-    
-    Parameters
-    ----------
-    a : double
-        dimensionless spin of the black hole
-    p : double
-        orbital semi-latus rectum
-    e : double
-        orbital eccentricity
-    is_prograde : bool
-        True (default) if the orbit is prograde. Otherwise, the orbit is retrograde
-
-    Returns
-    -------
-    double
-    """
-    a = abs(a)
-    if a == 1:
-        raise ValueError("Extreme Kerr not supported")
-    if e == 1:
-        raise ValueError("Marginally bound orbits not supported")
-    if not valid_params(a, e, 0.5):
-        raise ValueError("a^2, e and x^2 must be between 0 and 1")
-    
-    Lz_sign = -1+2*int(is_prograde)
-    P = 0
-    S = 2*(a**4*(-1+e**2)*p+(-4+p)*p**3+a**2*p**2*(3+e**2+p)
-           -Lz_sign*2*sqrt(a**2*p**3*(a**4*(-1+e**2)**2+(-4*e**2+(-2+p)**2)*p**2+2*a**2*p*(-2+p+e**2*(2+p))))
-           )/(
-               a**4*(-1+e**2)**2+(-4+p)**2*p**2+2*a**2*(-1+e**2)*p*(4+p)
-           )
-    P = 0
-    r1 = p/(1-e)
-    r2 = p/(1+e)
-    r3 = (S+sqrt(S**2-4*P))/2
-    r4 = (S-sqrt(S**2-4*P))/2
-    E2 = 1+2*(-1+e**2)/(2*p+S-e**2*S)
-    L2 = (2*(a**2*(-1+e**2)+p**2)*(a**2-P)+4*a**2*p*S)/(a**2*(2*p+S-e**2*S))
-    #Q = 0
-    z_minus = 0
-    z_plus = -(p**2+2*p*S)/(a**2*(-1+e**2))
-    k_r = (r1-r2)/(r1-r3)*(r3-r4)/(r2-r4)
-    k_theta = 0
-    factor1 = Lz_sign*sqrt((r1-r3)*(r2-r4)/(a**2*z_plus))
-    rtheta_ratio = factor1*ellipk(k_theta)/ellipk(k_r)
-
-    r_plus = 1+sqrt(1-a**2)
-    r_minus = 1-sqrt(1-a**2)
-    h_r = (r1-r2)/(r1-r3)
-    h_plus = h_r*(r3-r_plus)/(r2-r_plus)
-    h_minus = h_r*(r3-r_minus)/(r2-r_minus)
-    factor2 = 2*a/(pi*(r_plus-r_minus)*sqrt((1-E2)*(r1-r3)*(r2-r4)))
-    B_theta = 2*_ellippi(z_minus, k_theta)*sqrt(L2)/(pi*sqrt((1-E2)*a**2*z_plus))
-    B_r_plus = (2*sqrt(E2)*r_plus-Lz_sign*a*sqrt(L2))/(r3-r_plus)*(ellipk(k_r)-(r2-r3)/(r2-r_plus)*_ellippi(h_plus, k_r))
-    B_r_minus = (2*sqrt(E2)*r_minus-Lz_sign*a*sqrt(L2))/(r3-r_minus)*(ellipk(k_r)-(r2-r3)/(r2-r_minus)*_ellippi(h_minus, k_r))
-    B_r = factor2*(B_r_plus-B_r_minus)
-    return B_r*rtheta_ratio+B_theta
+    ratio = phiInteger/thetaInteger
+    Lz_sign = sign(ratio-1)
+    p0 = _phitheta_resonance_p(a, e, 0, thetaInteger, phiInteger)
+    p1 = _phitheta_resonance_p(a, e, Lz_sign, thetaInteger, phiInteger)
+    if (ratio>1)&((p<p1)|(p0<p)):
+        print(f"p must be in [{p1:f},{p0:f}]")
+        return nan
+    if (ratio<1)&((p<p0)|(p1<p)):
+        print(f"p must be in [{p0:f},{p1:f}]")
+        return nan
+    if p == p0:
+        return 0
+    if p == p1:
+        return 1
+    x0 = Lz_sign*(p-p0)/(p1-p0)
+    resonantEquation = lambda x: _phitheta_frequencyRatio(a, p, e, x)-abs(ratio)
+    return newton(resonantEquation, x0)
 
 # Finding triple resonance
-def tripleResonance_rMode(thetaMode, phiMode, a, e, is_prograde=True):
-    """Find possible r-modes sastify rMode*omega_r=thetaMode*omega_theta=phiMode*omega_phi.
+def _tripleResonance_rInteger(thetaInteger, phiInteger, a, e):
+    """Find possible r-integers sastify omega_r:omega_theta:omega_phi = r-integer:theta-integer:phi-integer.
 
     Parameters
     ----------
@@ -697,15 +713,11 @@ def tripleResonance_rMode(thetaMode, phiMode, a, e, is_prograde=True):
     """
         
     a = abs(a)
-    phitheta_ratio = thetaMode/phiMode
-    Lz_sign = int(is_prograde)*2-1
+    phitheta_ratio = phiInteger/thetaInteger
+    Lz_sign = sign(phitheta_ratio-1)
     
-    if (phitheta_ratio <= 0) | (phitheta_ratio == 1):
-        raise ValueError("The ratio must be positive and not equal to 1")
-    if (phitheta_ratio > 1) & (not is_prograde):
-        raise ValueError("The ratio must be larger than 1 if the orbit is prograde")
-    if (phitheta_ratio < 1) & is_prograde:
-        raise ValueError("The ratio must be lesser than 1 if the orbit is retrograde")
+    if not valid_integers(0, thetaInteger, phiInteger):
+        raise ValueError("Require |rInteger| > |thetaInteger|, |rInteger| > |phiInteger| and thetaInteger*phiInteger>0")
     if a == 1:
         raise ValueError("Extreme Kerr not supported")
     if e == 1:
@@ -713,20 +725,15 @@ def tripleResonance_rMode(thetaMode, phiMode, a, e, is_prograde=True):
     if not valid_params(a, e, 0.5):
         raise ValueError("a^2, e and x^2 must be between 0 and 1")
 
-    p1 = _doubleResonance_solver(lambda p: abs(phitheta_frequencyRatio_equatorialLimit(a, p, e, is_prograde))-phitheta_ratio,
-                                 (2*a/abs(phitheta_ratio-1))**(2/3),
-                                 separatrix(a, e, Lz_sign))
-    rtheta_ratio1 = abs(rtheta_frequencyRatio_equatorialLimit(a, p1, e, is_prograde))
+    p0 = _phitheta_resonance_p(a, e, 0, thetaInteger, phiInteger)
+    p1 = _phitheta_resonance_p( a, e, Lz_sign, thetaInteger, phiInteger)
+    rtheta_ratio0 = _rtheta_frequencyRatio(a, p0, e, 0)
+    rtheta_ratio1 = _rtheta_frequencyRatio(a, p1, e, Lz_sign)
     
-    p2 = _doubleResonance_solver(lambda p: abs(phitheta_frequencyRatio_polarLimit(a, p, e, is_prograde))-phitheta_ratio,
-                                 (2*a/abs(phitheta_ratio-1))**(2/3),
-                                 separatrix(a, e, 0))
-    rtheta_ratio2 = abs(rtheta_frequencyRatio_polarLimit(a, p2, e, is_prograde))
-    
-    return sorted([thetaMode/rtheta_ratio1, thetaMode/rtheta_ratio2])
+    return sorted([thetaInteger*rtheta_ratio0, thetaInteger*rtheta_ratio1])
 
-def tripleResonance_thetaMode(rMode, phiMode, a, e, is_prograde=True):
-    """Find possible theta-modes sastify rMode*omega_r=thetaMode*omega_theta=phiMode*omega_phi.
+def _tripleResonance_thetaInteger(rInteger, phiInteger, a, e):
+    """Find possible theta-integers sastify omega_r:omega_theta:omega_phi = r-integer:theta-integer:phi-integer.
 
     Parameters
     ----------
@@ -748,11 +755,11 @@ def tripleResonance_thetaMode(rMode, phiMode, a, e, is_prograde=True):
     """
         
     a = abs(a)
-    rphi_ratio = phiMode/rMode
-    Lz_sign = int(is_prograde)*2-1
+    rphi_ratio = rInteger/phiInteger
+    Lz_sign = sign(rphi_ratio)
     
-    if not valid_frequencyRatio(rphi_ratio):
-        raise ValueError("r-mode must be larger than phi-mode")
+    if not valid_integers(rInteger, 0, phiInteger):
+        raise ValueError("Require |rInteger| > |thetaInteger|, |rInteger| > |phiInteger| and thetaInteger*phiInteger>0")
     if a == 1:
         raise ValueError("Extreme Kerr not supported")
     if e == 1:
@@ -760,19 +767,14 @@ def tripleResonance_thetaMode(rMode, phiMode, a, e, is_prograde=True):
     if not valid_params(a, e, 0.5):
         raise ValueError("a^2, e and x^2 must be between 0 and 1")
 
-    p1 = _doubleResonance_solver(lambda p: abs(rphi_frequencyRatio_equatorialLimit(a, p, e, is_prograde))-rphi_ratio,
-                                 6/(1-rphi_ratio**2),
-                                 separatrix(a, e, Lz_sign))
-    rtheta_ratio1 = abs(rtheta_frequencyRatio_equatorialLimit(a, p1, e, is_prograde))
+    p0 = _rphi_resonance_p(a, e, 0, rInteger, phiInteger)
+    p1 = _rphi_resonance_p(a, e, Lz_sign, rInteger, phiInteger)
+    rtheta_ratio0 = _rtheta_frequencyRatio(a, p0, e, 0)
+    rtheta_ratio1 = _rtheta_frequencyRatio(a, p1, e, Lz_sign)
     
-    p2 = _doubleResonance_solver(lambda p: abs(rphi_frequencyRatio_polarLimit(a, p, e, is_prograde))-rphi_ratio,
-                                 6/(1-rphi_ratio**2),
-                                 separatrix(a, e, 0))
-    rtheta_ratio2 = abs(rtheta_frequencyRatio_polarLimit(a, p2, e, is_prograde))
-    
-    return sorted([rtheta_ratio1*rMode, rtheta_ratio2*rMode])
+    return sorted([rInteger/rtheta_ratio0, rInteger/rtheta_ratio1])
 
-def tripleResonance_phiMode(rMode, thetaMode, a, e, is_prograde=True):
+def _tripleResonance_phiInteger(rInteger, thetaInteger, a, e):
     """Find possible phi-modes sastify rMode*omega_r=thetaMode*omega_theta=phiMode*omega_phi.
 
     Parameters
@@ -795,11 +797,11 @@ def tripleResonance_phiMode(rMode, thetaMode, a, e, is_prograde=True):
     """
         
     a = abs(a)
-    rtheta_ratio = thetaMode/rMode
-    Lz_sign = int(is_prograde)*2-1
+    rtheta_ratio = rInteger/thetaInteger
+    Lz_sign = rtheta_ratio
     
-    if not valid_frequencyRatio(rtheta_ratio):
-        raise ValueError("r-mode must be larger than theta-mode")
+    if not valid_integers(rInteger, thetaInteger, 0):
+        raise ValueError("Require |rInteger| > |thetaInteger|, |rInteger| > |phiInteger| and thetaInteger*phiInteger>0")
     if a == 1:
         raise ValueError("Extreme Kerr not supported")
     if e == 1:
@@ -807,19 +809,17 @@ def tripleResonance_phiMode(rMode, thetaMode, a, e, is_prograde=True):
     if not valid_params(a, e, 0.5):
         raise ValueError("a^2, e and x^2 must be between 0 and 1")
 
-    p1 = _doubleResonance_solver(lambda p: abs(rtheta_frequencyRatio_equatorialLimit(a, p, e, is_prograde))-rtheta_ratio,
-                                 6/(1-rtheta_ratio**2),
-                                 separatrix(a, e, Lz_sign))
-    rphi_ratio1 = abs(rphi_frequencyRatio_equatorialLimit(a, p1, e, is_prograde))
+    p0 = _rtheta_resonance_p(a, e, 0, rInteger, thetaInteger)
+    p1 = _rtheta_resonance_p(a, e, Lz_sign, rInteger, thetaInteger)
+    if Lz_sign > 0:
+        rphi_ratio0 = _rphi_frequencyRatio(a, p0, e, 0)[0]
+    elif Lz_sign < 0:
+        rphi_ratio0 = _rphi_frequencyRatio(a, p0, e, 0)[1]
+    rphi_ratio1 = _rphi_frequencyRatio(a, p1, e, Lz_sign)
     
-    p2 = _doubleResonance_solver(lambda p: abs(rtheta_frequencyRatio_polarLimit(a, p, e, is_prograde))-rtheta_ratio,
-                                 6/(1-rtheta_ratio**2),
-                                 separatrix(a, e, 0))
-    rphi_ratio2 = abs(rphi_frequencyRatio_polarLimit(a, p2, e, is_prograde))
-    
-    return sorted([rphi_ratio1*rMode, rphi_ratio2*rMode])
+    return sorted([rInteger/rphi_ratio0, rInteger/rphi_ratio1])
 
-def tripleResonance(rMode, thetaMode, phiMode, a, e, is_prograde=True):
+def _tripleResonance(a, e, rInteger, thetaInteger, phiInteger):
     """Find (p, x) from resonant modes
 
     Parameters
@@ -844,14 +844,12 @@ def tripleResonance(rMode, thetaMode, phiMode, a, e, is_prograde=True):
     """
     
     a = abs(a)
-    rtheta_ratio = thetaMode/rMode
-    rphi_ratio = phiMode/rMode
-    Lz_sign = int(is_prograde)*2-1
+    rtheta_ratio = rInteger/thetaInteger
+    rphi_ratio = rInteger/phiInteger
+    Lz_sign = sign(rtheta_ratio)
     
-    if not valid_frequencyRatio(rtheta_ratio):
-        raise ValueError("Require r-mode > theta-mode > 0")
-    if not valid_frequencyRatio(rphi_ratio):
-        raise ValueError("Require r-mode > phi-mode > 0")
+    if not valid_integers(rInteger, thetaInteger, phiInteger):
+        raise ValueError("Require |rInteger| > |thetaInteger|, |rInteger| > |phiInteger| and thetaInteger*phiInteger>0")
     if a == 1:
         raise ValueError("Extreme Kerr not supported")
     if e == 1:
@@ -859,27 +857,73 @@ def tripleResonance(rMode, thetaMode, phiMode, a, e, is_prograde=True):
     if not valid_params(a, e, 0.5):
         raise ValueError("a^2, e and x^2 must be between 0 and 1")  
 
-    sep1 = separatrix(a, e, Lz_sign)
-    sep2 = separatrix(a, e, 0)
-    p0_rtheta = 6/(1-rtheta_ratio**2)
-    p0_rphi = 6/(1-rphi_ratio**2)
-    p1_rtheta = _doubleResonance_solver(lambda p: abs(rtheta_frequencyRatio_equatorialLimit(a, p, e, is_prograde))-rtheta_ratio, p0_rtheta, sep1)
-    p1_rphi = _doubleResonance_solver(lambda p: abs(rphi_frequencyRatio_equatorialLimit(a, p, e, is_prograde))-rphi_ratio, p0_rphi, sep1)
-    p2_rtheta = _doubleResonance_solver(lambda p: abs(rtheta_frequencyRatio_polarLimit(a, p, e, is_prograde))-rtheta_ratio, p0_rtheta, sep2)
-    p2_rphi = _doubleResonance_solver(lambda p: abs(rphi_frequencyRatio_polarLimit(a, p, e, is_prograde))-rphi_ratio, p0_rphi, sep2)    
+    p0_rtheta = _rtheta_resonance_p(a, e, 0, rInteger, thetaInteger)
+    p1_rtheta = _rtheta_resonance_p(a, e, Lz_sign, rInteger, thetaInteger)
+    p0_rphi = _rphi_resonance_p(a, e, 0, rInteger, phiInteger)
+    p1_rphi = _rphi_resonance_p(a, e, Lz_sign, rInteger, phiInteger)
                                    
-    check_if_having_solution = (p1_rtheta-p1_rphi)*(p2_rtheta-p2_rphi)
+    check_if_having_solution = (p0_rtheta-p0_rphi)*(p1_rtheta-p1_rphi)
     
     if (check_if_having_solution > 0) | (check_if_having_solution == nan):
+        rs = _tripleResonance_rInteger(thetaInteger, phiInteger, a, e)
+        thetas = _tripleResonance_phiInteger(rInteger, thetaInteger, a, e)
+        phis = _tripleResonance_thetaInteger(rInteger, phiInteger, a, e)
+        print("No triple resonance, try changing one of the integers:")
+        print(f"Choose r-integer in [{rs[0]:f}, {rs[1]:f}]")
+        print(f"Choose phi-integer in [{thetas[0]:f}, {thetas[1]:f}]")
+        print(f"Choose theta-integer in [{phis[0]:f}, {phis[1]:f}]")
         return [nan, nan]
     elif check_if_having_solution < 0:
-        x0 = Lz_sign/((p1_rphi-p1_rtheta)/(p2_rtheta-p2_rphi)+1)
-        p0 = p2_rtheta-Lz_sign*x0*(p2_rtheta-p1_rtheta)
-        sol = fsolve(lambda X: [abs(_rtheta_frequencyRatio(a, X[0], e, X[1]))-rtheta_ratio,
-                                abs(_rphi_frequencyRatio(a, X[0], e, X[1]))-rphi_ratio], [p0, x0])
+        x0 = Lz_sign/((p1_rphi-p1_rtheta)/(p0_rtheta-p0_rphi)+1)
+        p0 = p0_rtheta-Lz_sign*x0*(p0_rtheta-p1_rtheta)
+        sol = fsolve(lambda X: [_rtheta_frequencyRatio(a, X[0], e, X[1])-abs(rtheta_ratio),
+                                _rphi_frequencyRatio(a, X[0], e, X[1])-abs(rphi_ratio)], [p0, x0])
         return sol
     else:
-        if (p1_rtheta-p1_rphi) == 0:
-            return [p1_rtheta, Lz_sign]
+        if (p0_rtheta-p0_rphi) == 0:
+            return [p0_rtheta, Lz_sign]
         else:
-            return [p2_rtheta, 0]
+            return [p1_rtheta, 0]
+        
+# Generic function
+
+def findResonance(a, p=None, e=None, x=None, integers=[0,0,0]):
+    rInteger, thetaInteger, phiInteger = integers
+    if (rInteger!=0) & (thetaInteger!=0) & (phiInteger!=0):
+        if e != None:
+            return _tripleResonance(a, e, rInteger, thetaInteger, phiInteger)
+        else: 
+            raise ValueError("Only support finding (p,x) with given (a,e)")
+        
+    elif (rInteger==0) & (thetaInteger!=0) & (phiInteger!=0):
+        if (p==None) & (e!=None) & (x!=None):
+            return _phitheta_resonance_p(a, e, x, thetaInteger, phiInteger)
+        elif (p!=None) & (e==None) & (x!=None):
+            return _phitheta_resonance_e(a, p, x, thetaInteger, phiInteger)
+        elif (p!=None) & (e!=None) & (x==None):
+            return _phitheta_resonance_x(a, p, e, thetaInteger, phiInteger)
+        else: 
+            raise ValueError("Require 2 of (p, e, x)")
+        
+    elif (rInteger!=0) & (thetaInteger==0) & (phiInteger!=0):
+        if (p==None) & (e!=None) & (x!=None):
+            return _rphi_resonance_p(a, e, x, rInteger, phiInteger)
+        elif (p!=None) & (e==None) & (x!=None):
+            return _rphi_resonance_e(a, p, x, rInteger, phiInteger)
+        elif (p!=None) & (e!=None) & (x==None):
+            return _rphi_resonance_x(a, p, e, rInteger, phiInteger)
+        else: 
+            raise ValueError("Require 2 of (p, e, x)")
+        
+    elif (rInteger!=0) & (thetaInteger!=0) & (phiInteger==0):
+        if (p==None) & (e!=None) & (x!=None):
+            return _rtheta_resonance_p(a, e, x, rInteger, thetaInteger)
+        elif (p!=None) & (e==None) & (x!=None):
+            return _rtheta_resonance_e(a, p, x, rInteger, thetaInteger)
+        elif (p!=None) & (e!=None) & (x==None):
+            return _rtheta_resonance_x(a, p, e, rInteger, thetaInteger)
+        else: 
+            raise ValueError("Require 2 of (p, e, x)")
+        
+    else:
+        raise ValueError("At least 2 of the integers are non-zero")        
